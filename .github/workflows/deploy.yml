@@ -1,0 +1,46 @@
+name: Deploy to ECR
+
+# [Trigger] 언제 실행할까?
+on:
+  push:
+    branches: [ "main" ]
+
+# [Environment Variables] 설정값 (사용자님 수정 필요!)
+env:
+  AWS_REGION: ap-southeast-2              # 리전 (호주: ap-southeast-2)
+  ECR_REPOSITORY: my-dotnet-repo          # 아까 만든 ECR 리포지토리 이름
+
+# [Jobs] 실제 할 일
+jobs:
+  build-and-push:
+    name: Build Image
+    runs-on: ubuntu-latest   # ★ 중요: 깃허브의 인텔(AMD64) 컴퓨터를 빌려 씀 (M1 맥북 문제 해결!)
+
+    steps:
+    # 1. 깃허브 창고에서 코드 가져오기
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # 2. AWS 자격증명 설정 (Secrets에서 가져옴)
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # 3. ECR 로그인
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    # 4. 빌드하고 업로드 (Build & Push)
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: latest
+      run: |
+        # 여기서는 --platform 옵션이 필요 없습니다. (원래 인텔 컴퓨터니까요)
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
